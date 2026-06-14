@@ -1,0 +1,22 @@
+# Pre-commit hooks lint only the lines you changed — pre-existing violations
+# in touched files are grandfathered, and legacy code is never reformatted.
+# Install with: uvx pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-diff
+        name: ruff (changed lines only)
+        entry: uv run --no-project python .github/scripts/ruff_diff.py --staged
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files

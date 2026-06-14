@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned versions fresh.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Keep Python deps fresh, except those ignored below.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-deps:
+        patterns:
+          - "*"
+    ignore:
+      # Banned from auto-update — bumped by hand (major API/ABI churn each
+      # release; needs GPU validation).
+      - dependency-name: "datasets"
+      - dependency-name: "torch"
+      - dependency-name: "transformers"

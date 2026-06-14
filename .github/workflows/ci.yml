@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Ruff (changed lines)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history is needed to diff against the base
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Ruff on changed lines
+        # Lints only the lines added/modified in this PR/push — pre-existing
+        # violations in touched files are grandfathered. See .github/scripts/ruff_diff.py.
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            BASE="origin/${{ github.base_ref }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          # First push or all-zero SHA: nothing to diff against, so skip.
+          if ! git rev-parse --quiet --verify "$BASE^{commit}" >/dev/null 2>&1; then
+            echo "No valid base to diff against; skipping lint."
+            exit 0
+          fi
+          python3 .github/scripts/ruff_diff.py --base "$BASE"
+
+  test:
+    name: Unit tests (CPU contract tier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Sync dev dependencies
+        run: uv sync --extra dev
+      - name: Run CPU contract suite
+        # GPU/distributed/slow tiers run on a compute node, not here.
+        run: uv run pytest tests/unit -m "not gpu and not slow and not distributed" -q
+
+  deps:
+    name: Dependency lock check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Verify uv.lock is consistent and resolvable
+        run: uv lock --check
+
+  build:
+    name: Build & metadata check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Validate package metadata
+        run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
