@@ -1,0 +1,68 @@
+name: Claude Code Review
+
+# Auto-review every real PR into main: Claude reads the diff and posts a
+# top-level summary comment. The gh commands it uses are granted via
+# claude_args --allowedTools; the action's default toolset excludes Bash.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  # One in-flight review per PR; a new push cancels the prior run.
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    # Skip drafts and Dependabot dep-bump PRs — no LLM review needed, saves cost.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # post/update the sticky review comment
+      id-token: write        # OIDC token exchange for the GitHub App
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in
+            ${{ github.repository }}. Read the changes with
+            `gh pr diff ${{ github.event.pull_request.number }}`, then open any
+            surrounding files you need for context.
+
+            Post one top-level summary comment with
+            `gh pr comment ${{ github.event.pull_request.number }} --body "<your review>"`.
+            For specific line-level issues use the
+            mcp__github_inline_comment__create_inline_comment tool.
+
+            This repo is HiMuon: a tile-local Newton-Schulz (NS) orthogonalized optimizer
+            with custom Triton kernels and an FSDP2 parameter-bank training stack.
+            Prioritize, in order:
+              1. Correctness of the Triton kernels and the NS math — numerical stability,
+                 bf16 assumptions, tile/shape handling, dtype casts, CUDA-graph capture.
+              2. FSDP2 bank-sharding logic — shard indexing, layer-axis padding, the unbank
+                 round-trip, and any cross-rank / collective assumptions.
+              3. Public API and training-script call-surface stability — flag changes that
+                 would break train.py / train_ddp.py / train_fsdp.py or the optimizer factory.
+              4. Real bugs, races, and resource/memory leaks over style nits.
+
+            Be concise. If the change is clean, say so in a sentence. Do not restate the diff.
+            For each issue, show the concrete fix as a code block (use a ```suggestion```
+            block in inline comments) rather than only describing it in prose.
+            Skip pure formatting/lint comments — ruff + pre-commit already cover those.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --max-turns 15
+            --model sonnet
