@@ -1,0 +1,59 @@
+[project]
+name = "himuon"
+version = "1.0.0"
+description = "HiMuon: a tile-local Newton-Schulz orthogonalized optimizer for scalable LLM pre-training, with a single-GPU / DDP / FSDP training stack."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Ziyuan Tang", email = "tang0389@umn.edu" },
+]
+dependencies = [
+    "datasets==3.5.0",
+    "loguru>=0.7.3",
+    "torch==2.6.0",
+    "transformers==4.51.2",
+]
+
+[project.optional-dependencies]
+wandb = [
+    "wandb>=0.23.1",
+]
+dev = [
+    "matplotlib>=3.10.8",
+    "pytest>=9.0.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/tang0389/himuon"
+Repository = "https://github.com/tang0389/himuon"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+# The default CI tier is the pure-CPU contract/API-doc suite under tests/unit/.
+# GPU behavior tests under tests/integration/ are opt-in (run on a compute node):
+#   uv run pytest tests/unit                                  # CPU, what CI runs
+#   uv run pytest -m "not gpu and not slow and not distributed"  # equivalent selector
+#   uv run pytest tests/integration -m gpu                    # GPU tier (manual)
+markers = [
+    "gpu: requires a CUDA GPU + Triton (not run in CI)",
+    "distributed: requires torchrun multi-process launch (not run in CI)",
+    "slow: opt-in perf/memory/full-sweep/long-horizon tests",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# E/F: pyflakes + pycodestyle errors; I: import sorting; UP: pyupgrade; B: flake8-bugbear
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests and microbenchmarks favor expedience over strictness.
+"tests/**" = ["E501", "F841", "B"]
+"microbench/**" = ["E501", "F841", "B"]

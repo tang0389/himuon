@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 440" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <rect width="1080" height="440" fill="#ffffff"/>
+  <style>
+    .title { font-size: 16px; font-weight: 600; fill: #1f2937; }
+    .subtitle { font-size: 11px; fill: #6b7280; }
+    .matrix-full { fill: #DBEAFE; stroke: #2B5EA7; stroke-width: 1.4; }
+    .tile { fill: #FEF3C7; stroke: #B45309; stroke-width: 1; }
+    .tile-small { fill: #FEF3C7; stroke: #B45309; stroke-width: 0.8; }
+    .tile-label { font-size: 10px; fill: #78350F; font-weight: 600; }
+    .matrix-label { font-size: 13px; fill: #1f2937; font-weight: 500; }
+    .layer-label { font-size: 10px; fill: #374151; }
+    .complexity { font-size: 14px; fill: #111827; font-family: "JetBrains Mono", "Menlo", monospace; font-weight: 600; }
+    .complexity-label { font-size: 10px; fill: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .axis-label { fill: #6b7280; font-size: 11px; font-style: italic; }
+    .note { font-size: 11px; fill: #6b7280; font-style: italic; }
+    .fused-box { fill: #DCFCE7; stroke: #2B7A4B; stroke-width: 1.4; }
+    .fused-text { font-size: 12px; fill: #14532D; font-weight: 600; }
+  </style>
+
+  <!-- ===== PANEL 1: Full-matrix NS (Muon) ===== -->
+  <g transform="translate(0,0)">
+    <text class="title" x="180" y="38" text-anchor="middle">Full-matrix NS  (Muon)</text>
+    <text class="subtitle" x="180" y="58" text-anchor="middle">one NS on the entire H × W gradient</text>
+
+    <rect class="matrix-full" x="100" y="95" width="160" height="160" />
+    <text class="matrix-label" x="180" y="180" text-anchor="middle">G  ∈  ℝ^(H × W)</text>
+
+    <text class="axis-label" x="85" y="180" text-anchor="end">H</text>
+    <text class="axis-label" x="180" y="275" text-anchor="middle">W</text>
+
+    <text class="complexity-label" x="180" y="330" text-anchor="middle">FLOPs per matrix</text>
+    <text class="complexity" x="180" y="355" text-anchor="middle">O( H² · W · K )</text>
+  </g>
+
+  <line x1="325" y1="70" x2="325" y2="400" stroke="#e5e7eb" stroke-width="1" />
+
+  <!-- ===== PANEL 2: Tile-local NS ===== -->
+  <g transform="translate(285,0)">
+    <text class="title" x="180" y="38" text-anchor="middle">Tile-local NS</text>
+    <text class="subtitle" x="180" y="58" text-anchor="middle">partition into T × T tiles, NS per tile</text>
+
+    <!-- 4 cols × 4 rows of tiles, tile size 40 × 40 -->
+    <g transform="translate(110,95)">
+      <rect class="tile" x="0"   y="0"   width="40" height="40" />
+      <rect class="tile" x="40"  y="0"   width="40" height="40" />
+      <rect class="tile" x="80"  y="0"   width="40" height="40" />
+      <rect class="tile" x="120" y="0"   width="40" height="40" />
+      <rect class="tile" x="0"   y="40"  width="40" height="40" />
+      <rect class="tile" x="40"  y="40"  width="40" height="40" />
+      <rect class="tile" x="80"  y="40"  width="40" height="40" />
+      <rect class="tile" x="120" y="40"  width="40" height="40" />
+      <rect class="tile" x="0"   y="80"  width="40" height="40" />
+      <rect class="tile" x="40"  y="80"  width="40" height="40" />
+      <rect class="tile" x="80"  y="80"  width="40" height="40" />
+      <rect class="tile" x="120" y="80"  width="40" height="40" />
+      <rect class="tile" x="0"   y="120" width="40" height="40" />
+      <rect class="tile" x="40"  y="120" width="40" height="40" />
+      <rect class="tile" x="80"  y="120" width="40" height="40" />
+      <rect class="tile" x="120" y="120" width="40" height="40" />
+      <text class="tile-label" x="20"  y="25"  text-anchor="middle">NS</text>
+      <text class="tile-label" x="60"  y="25"  text-anchor="middle">NS</text>
+      <text class="tile-label" x="100" y="25"  text-anchor="middle">NS</text>
+      <text class="tile-label" x="140" y="25"  text-anchor="middle">NS</text>
+      <text class="tile-label" x="20"  y="65"  text-anchor="middle">NS</text>
+      <text class="tile-label" x="60"  y="65"  text-anchor="middle">NS</text>
+      <text class="tile-label" x="100" y="65"  text-anchor="middle">NS</text>
+      <text class="tile-label" x="140" y="65"  text-anchor="middle">NS</text>
+      <text class="tile-label" x="20"  y="105" text-anchor="middle">NS</text>
+      <text class="tile-label" x="60"  y="105" text-anchor="middle">NS</text>
+      <text class="tile-label" x="100" y="105" text-anchor="middle">NS</text>
+      <text class="tile-label" x="140" y="105" text-anchor="middle">NS</text>
+      <text class="tile-label" x="20"  y="145" text-anchor="middle">NS</text>
+      <text class="tile-label" x="60"  y="145" text-anchor="middle">NS</text>
+      <text class="tile-label" x="100" y="145" text-anchor="middle">NS</text>
+      <text class="tile-label" x="140" y="145" text-anchor="middle">NS</text>
+    </g>
+
+    <!-- T axis labels -->
+    <text class="axis-label" x="95" y="120" text-anchor="end">T</text>
+    <text class="axis-label" x="130" y="92" text-anchor="middle">T</text>
+
+    <text class="complexity-label" x="180" y="330" text-anchor="middle">FLOPs per matrix</text>
+    <text class="complexity" x="180" y="355" text-anchor="middle">O( H · W · T · K )</text>
+    <text class="note" x="180" y="380" text-anchor="middle">T ≪ min(H, W)</text>
+  </g>
+
+  <line x1="625" y1="70" x2="625" y2="400" stroke="#e5e7eb" stroke-width="1" />
+
+  <!-- ===== PANEL 3: Cross-layer batching =====
+       4 layers shown (0..3) with 2, 2, 4, 8 tiles respectively. Layers
+       0/1/2 share tile shape → fused into one batched GEMM. Layer 3
+       has a different tile shape → its own launch. Total: 2 launches.
+       Ellipsis below suggests the same grouping extends to more layers. -->
+  <g transform="translate(680,0)">
+    <text class="title" x="180" y="38" text-anchor="middle">Cross-layer batching</text>
+    <text class="subtitle" x="180" y="58" text-anchor="middle">same-shape tiles fuse into one batched GEMM</text>
+
+    <!-- Layer 0 (2 tiles)  — tile 24×24, row mid y=112, label baseline y=116 -->
+    <text class="layer-label" x="15" y="116">Layer 0</text>
+    <rect class="tile-small" x="60" y="100" width="24" height="24" />
+    <rect class="tile-small" x="84" y="100" width="24" height="24" />
+
+    <!-- Layer 1 (2 tiles, same shape) — row mid y=141 -->
+    <text class="layer-label" x="15" y="145">Layer 1</text>
+    <rect class="tile-small" x="60" y="129" width="24" height="24" />
+    <rect class="tile-small" x="84" y="129" width="24" height="24" />
+
+    <!-- Layer 2 (4 tiles, same shape) — row mid y=170 -->
+    <text class="layer-label" x="15" y="174">Layer 2</text>
+    <rect class="tile-small" x="60"  y="158" width="24" height="24" />
+    <rect class="tile-small" x="84"  y="158" width="24" height="24" />
+    <rect class="tile-small" x="108" y="158" width="24" height="24" />
+    <rect class="tile-small" x="132" y="158" width="24" height="24" />
+
+    <!-- Group {0, 1, 2}: curly bracket y=[100,182], mid=141 → fused box -->
+    <path d="M 160 100 Q 172 100 172 141 Q 172 182 160 182" fill="none" stroke="#6b7280" stroke-width="1.3" />
+    <line x1="172" y1="141" x2="206" y2="141" stroke="#2B7A4B" stroke-width="2" marker-end="url(#arrow)" />
+    <rect class="fused-box" x="210" y="127" width="140" height="28" rx="6" />
+    <text class="fused-text" x="280" y="145" text-anchor="middle">1 batched GEMM</text>
+
+    <!-- Layer 3 (2 × 4 = 8 tiles, different shape) — grid mid y=211 -->
+    <text class="layer-label" x="15" y="215">Layer 3</text>
+    <rect class="tile-small" x="60"  y="187" width="24" height="24" />
+    <rect class="tile-small" x="84"  y="187" width="24" height="24" />
+    <rect class="tile-small" x="108" y="187" width="24" height="24" />
+    <rect class="tile-small" x="132" y="187" width="24" height="24" />
+    <rect class="tile-small" x="60"  y="211" width="24" height="24" />
+    <rect class="tile-small" x="84"  y="211" width="24" height="24" />
+    <rect class="tile-small" x="108" y="211" width="24" height="24" />
+    <rect class="tile-small" x="132" y="211" width="24" height="24" />
+
+    <!-- Layer 3 alone → its own green fused box -->
+    <line x1="158" y1="211" x2="206" y2="211" stroke="#2B7A4B" stroke-width="2" marker-end="url(#arrow)" />
+    <rect class="fused-box" x="210" y="197" width="140" height="28" rx="6" />
+    <text class="fused-text" x="280" y="215" text-anchor="middle">1 GEMM</text>
+
+    <!-- ellipsis: more layers below -->
+    <text x="72"  y="260" text-anchor="middle" font-size="18" fill="#9ca3af" font-weight="600">⋮</text>
+    <text x="96"  y="260" text-anchor="middle" font-size="18" fill="#9ca3af" font-weight="600">⋮</text>
+    <text x="120" y="260" text-anchor="middle" font-size="18" fill="#9ca3af" font-weight="600">⋮</text>
+    <text x="280" y="260" text-anchor="middle" font-size="18" fill="#9ca3af" font-weight="600">⋮</text>
+
+    <text class="complexity-label" x="180" y="330" text-anchor="middle">Kernel launches per step</text>
+    <text class="complexity" x="180" y="355" text-anchor="middle">L × (R·C) → few</text>
+    <text class="note" x="180" y="380" text-anchor="middle">SM saturation via batching</text>
+  </g>
+
+  <!-- arrow markers -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2B7A4B"/>
+    </marker>
+    <marker id="flow-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+</svg>

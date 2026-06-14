@@ -1,0 +1,41 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Checkpoints
+checkpoints/
+
+# Logs
+logs/
+wandb/
+
+# Experiments (local only)
+exp/
+scripts/archive/
+
+# Docs (local development notes, not shipped)
+docs/
+
+# Paper (Overleaf, own git history)
+paper/
+
+# Worktrees
+.worktrees/
+
+# Plots
+plots/
+
+# Cursor rules
+.cursor/
+
+# Claude Code
+.claude/
+.mcp.json
+CLAUDE.md
