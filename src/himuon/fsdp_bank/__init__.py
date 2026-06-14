@@ -17,6 +17,7 @@ Typical use::
 """
 
 from .bank import BankSpec, ParamBank
+from .llama3_scheme import Llama3BankScheme
 from .qwen3_scheme import Qwen3BankScheme
 from .scheme import BankScheme
 from .wrap import release_pre_shard_refs, unbank_state_dict, wrap_with_banks
@@ -26,6 +27,7 @@ __all__ = [
     "ParamBank",
     "BankScheme",
     "Qwen3BankScheme",
+    "Llama3BankScheme",
     "wrap_with_banks",
     "release_pre_shard_refs",
     "unbank_state_dict",

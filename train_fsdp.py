@@ -22,7 +22,13 @@ import time
 from datetime import datetime
 
 from himuon.dataset import ToyDataset
-from himuon.fsdp_bank import Qwen3BankScheme, release_pre_shard_refs, unbank_state_dict, wrap_with_banks
+from himuon.fsdp_bank import (
+    Llama3BankScheme,
+    Qwen3BankScheme,
+    release_pre_shard_refs,
+    unbank_state_dict,
+    wrap_with_banks,
+)
 from himuon.model import get_model_and_tokenizer, count_model_parameters, count_num_training_tokens
 from himuon.optim import get_optimizer
 from himuon.utils import TimeBudget, seed_everything, merge_kv_args
@@ -99,14 +105,16 @@ if __name__ == "__main__":
     model.to(device=device, dtype=torch.bfloat16)
 
     # HiMuon requires parameter-bank sharding (tiles must stay shard-local).
-    # Banks are Qwen3-only for now.
     use_banks = args.optimizer.lower() in ("himuon", "muon-fsdp")
     if use_banks:
-        assert args.model.lower().startswith("qwen3"), (
-            f"{args.optimizer} under FSDP needs a BankScheme; only Qwen3 is supported. "
-            f"Got model={args.model!r}."
-        )
-        model, banks = wrap_with_banks(model, Qwen3BankScheme(), world_size=world_size)
+        schemes = {"qwen3": Qwen3BankScheme, "llama": Llama3BankScheme}
+        model_type = model.config.model_type
+        if model_type not in schemes:
+            raise ValueError(
+                f"{args.optimizer} under FSDP requires a BankScheme; supported "
+                f"model_types: {list(schemes)}. Got {model_type!r}."
+            )
+        model, banks = wrap_with_banks(model, schemes[model_type](), world_size=world_size)
 
     mp_policy = MixedPrecisionPolicy(param_dtype=torch.bfloat16, reduce_dtype=torch.bfloat16)
     offload_policy = CPUOffloadPolicy() if args.cpu_offload else OffloadPolicy()
@@ -115,7 +123,9 @@ if __name__ == "__main__":
         fully_shard(model, mesh=mesh, mp_policy=mp_policy, offload_policy=offload_policy)
         release_pre_shard_refs(banks)
         torch.cuda.empty_cache()
-        shard_topology = f"bank-sharded (Qwen3, {len(banks)} banks) on mesh={tuple(mesh.shape)}"
+        shard_topology = (
+            f"bank-sharded ({model_type}, {len(banks)} banks) on mesh={tuple(mesh.shape)}"
+        )
     else:
         for layer in model.model.layers:
             fully_shard(layer, mesh=mesh, mp_policy=mp_policy, offload_policy=offload_policy)

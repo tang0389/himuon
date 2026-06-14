@@ -2,8 +2,8 @@
 
 Pure-CPU and offline: the banking / scheme / unbank logic needs no GPU or
 distributed launch — only ``fully_shard`` does, and that is covered in the
-integration tier. A synthetic Qwen3-shaped module (just the submodule names
-``Qwen3BankScheme`` keys on) exercises:
+integration tier. A synthetic decoder-shaped module (just the submodule names
+the schemes key on), run against every scheme, exercises:
 
   * ``wrap_with_banks`` builds the 5 documented banks at the right shapes, pads
     each layer axis up to a multiple of ``world_size``, copies every source
@@ -26,13 +26,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from himuon.fsdp_bank import (
+    Llama3BankScheme,
     Qwen3BankScheme,
     release_pre_shard_refs,
     unbank_state_dict,
     wrap_with_banks,
 )
 
-# Tiny Qwen3-shaped model. The scheme keys on
+# Tiny decoder-shaped model. The schemes key on
 # ``model.model.layers[i].self_attn.{q,k,v,o}_proj`` and
 # ``.mlp.{gate,up,down}_proj`` (all bias-free nn.Linear). q/o share a shape,
 # k/v share a (smaller) shape, gate/up share a shape, down is its transpose.
@@ -70,7 +71,7 @@ class _Inner(nn.Module):
         self.layers = nn.ModuleList([_Layer() for _ in range(L)])
 
 
-class _FakeQwen3(nn.Module):
+class _FakeDecoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.model = _Inner()
@@ -78,13 +79,20 @@ class _FakeQwen3(nn.Module):
         self.lm_head = nn.Linear(HID, 32, bias=False)
 
 
-def _fake_model() -> _FakeQwen3:
+def _fake_model() -> _FakeDecoder:
     torch.manual_seed(0)
-    return _FakeQwen3()
+    return _FakeDecoder()
 
 
 def _by_name(banks):
     return {b.spec.name: b for b in banks}
+
+
+# Both schemes key on the same per-layer projection layout the fixture
+# exposes, so every contract below runs against each of them.
+@pytest.fixture(params=[Qwen3BankScheme, Llama3BankScheme], ids=["qwen3", "llama3"])
+def scheme_cls(request):
+    return request.param
 
 
 # Expected per-bank (matrix_shape, n_padded@ws2, n_logical).
@@ -98,10 +106,10 @@ _EXPECTED = {
 
 
 class TestWrapWithBanks:
-    def test_builds_five_banks_with_expected_shapes(self):
-        _, banks = wrap_with_banks(_fake_model(), Qwen3BankScheme(), world_size=WS)
+    def test_builds_five_banks_with_expected_shapes(self, scheme_cls):
+        _, banks = wrap_with_banks(_fake_model(), scheme_cls(), world_size=WS)
         by = _by_name(banks)
-        assert set(by) == set(Qwen3BankScheme.BANK_NAMES)
+        assert set(by) == set(scheme_cls.BANK_NAMES)
         for name, (mshape, n_pad, n_log) in _EXPECTED.items():
             b = by[name]
             assert b.spec.matrix_shape == mshape, name
@@ -110,14 +118,14 @@ class TestWrapWithBanks:
             assert tuple(b.parameter.shape) == (n_pad, *mshape), name
 
     @pytest.mark.parametrize("ws", [1, 2, 4])
-    def test_pads_layer_axis_to_multiple_of_world_size(self, ws):
-        _, banks = wrap_with_banks(_fake_model(), Qwen3BankScheme(), world_size=ws)
+    def test_pads_layer_axis_to_multiple_of_world_size(self, scheme_cls, ws):
+        _, banks = wrap_with_banks(_fake_model(), scheme_cls(), world_size=ws)
         for b in banks:
             assert b.spec.n_padded % ws == 0, b.spec.name
             assert b.spec.n_padded >= b.spec.n_logical
             assert b.spec.n_padded - b.spec.n_logical < ws, "padding should be minimal"
 
-    def test_copies_weights_into_slots_and_deletes_originals(self):
+    def test_copies_weights_into_slots_and_deletes_originals(self, scheme_cls):
         m = _fake_model()
         layers = m.model.layers
         orig = {}
@@ -130,7 +138,7 @@ class TestWrapWithBanks:
             orig[("up", i)] = lyr.mlp.up_proj.weight.detach().clone()
             orig[("down", i)] = lyr.mlp.down_proj.weight.detach().clone()
 
-        _, banks = wrap_with_banks(m, Qwen3BankScheme(), world_size=WS)
+        _, banks = wrap_with_banks(m, scheme_cls(), world_size=WS)
         by = _by_name(banks)
 
         for i, lyr in enumerate(layers):
@@ -147,14 +155,14 @@ class TestWrapWithBanks:
             for proj in ("gate_proj", "up_proj", "down_proj"):
                 assert "weight" not in getattr(lyr.mlp, proj)._parameters
 
-    def test_padding_rows_are_zero(self):
-        _, banks = wrap_with_banks(_fake_model(), Qwen3BankScheme(), world_size=WS)
+    def test_padding_rows_are_zero(self, scheme_cls):
+        _, banks = wrap_with_banks(_fake_model(), scheme_cls(), world_size=WS)
         by = _by_name(banks)
         # q_bank pads 3 -> 4: the trailing row is padding and must stay zero.
         assert torch.count_nonzero(by["q_bank"].parameter.data[3]) == 0
 
-    def test_name_to_idx_interleaves_kv_and_gate_up(self):
-        _, banks = wrap_with_banks(_fake_model(), Qwen3BankScheme(), world_size=WS)
+    def test_name_to_idx_interleaves_kv_and_gate_up(self, scheme_cls):
+        _, banks = wrap_with_banks(_fake_model(), scheme_cls(), world_size=WS)
         by = _by_name(banks)
         kv = by["kv_bank"].name_to_idx
         gu = by["gate_up_bank"].name_to_idx
@@ -164,7 +172,7 @@ class TestWrapWithBanks:
             assert gu[f"model.layers.{i}.mlp.gate_proj.weight"] == 2 * i
             assert gu[f"model.layers.{i}.mlp.up_proj.weight"] == 2 * i + 1
 
-    def test_named_parameters_swaps_projections_for_banks(self):
+    def test_named_parameters_swaps_projections_for_banks(self, scheme_cls):
         m = _fake_model()
         before = {n for n, _ in m.named_parameters()}
         proj_names = {
@@ -172,9 +180,9 @@ class TestWrapWithBanks:
         }
         assert proj_names, "fixture should expose per-layer projection weights"
 
-        model, _ = wrap_with_banks(m, Qwen3BankScheme(), world_size=WS)
+        model, _ = wrap_with_banks(m, scheme_cls(), world_size=WS)
         after = {n for n, _ in model.named_parameters()}
-        for name in Qwen3BankScheme.BANK_NAMES:
+        for name in scheme_cls.BANK_NAMES:
             assert name in after, f"bank {name} not registered as a parameter"
         assert proj_names.isdisjoint(after), "projection weights still present after banking"
         # untouched params survive
@@ -182,22 +190,22 @@ class TestWrapWithBanks:
 
 
 class TestForwardSemantics:
-    def test_rewired_linear_matches_original_output(self):
+    def test_rewired_linear_matches_original_output(self, scheme_cls):
         m = _fake_model()
         x = torch.randn(2, HID)
         w_orig = m.model.layers[0].self_attn.q_proj.weight.detach().clone()
         ref = F.linear(x, w_orig, None)
 
-        model, _ = wrap_with_banks(m, Qwen3BankScheme(), world_size=WS)
+        model, _ = wrap_with_banks(m, scheme_cls(), world_size=WS)
         out = model.model.layers[0].self_attn.q_proj(x)
         assert torch.equal(out, ref), "rewired forward diverged from original linear"
 
 
 class TestUnbankStateDict:
-    def test_inverts_banking_back_to_hf_keys(self):
+    def test_inverts_banking_back_to_hf_keys(self, scheme_cls):
         m = _fake_model()
         orig = {n: p.detach().clone() for n, p in m.named_parameters()}
-        model, banks = wrap_with_banks(m, Qwen3BankScheme(), world_size=WS)
+        model, banks = wrap_with_banks(m, scheme_cls(), world_size=WS)
 
         banked = {n: p.detach().clone() for n, p in model.named_parameters()}
         out = unbank_state_dict(banked, banks)
@@ -217,23 +225,23 @@ class TestUnbankStateDict:
                 assert key in out, key
                 assert torch.equal(out[key], orig[key]), key
         # bank keys removed; padding slots dropped (only n_logical emitted)
-        for name in Qwen3BankScheme.BANK_NAMES:
+        for name in scheme_cls.BANK_NAMES:
             assert name not in out
         # non-bank params pass through untouched
         assert torch.equal(out["lm_head.weight"], orig["lm_head.weight"])
         assert torch.equal(out["embed_tokens.weight"], orig["embed_tokens.weight"])
 
-    def test_missing_bank_raises(self):
-        _, banks = wrap_with_banks(_fake_model(), Qwen3BankScheme(), world_size=WS)
+    def test_missing_bank_raises(self, scheme_cls):
+        _, banks = wrap_with_banks(_fake_model(), scheme_cls(), world_size=WS)
         with pytest.raises(KeyError):
             unbank_state_dict({}, banks)
 
 
-def test_release_pre_shard_refs_nulls_parameter_keeps_metadata():
-    _, banks = wrap_with_banks(_fake_model(), Qwen3BankScheme(), world_size=WS)
+def test_release_pre_shard_refs_nulls_parameter_keeps_metadata(scheme_cls):
+    _, banks = wrap_with_banks(_fake_model(), scheme_cls(), world_size=WS)
     assert all(b.parameter is not None for b in banks)
     release_pre_shard_refs(banks)
     assert all(b.parameter is None for b in banks)
     # spec / name_to_idx survive for introspection + unbank
-    assert all(b.spec.name in Qwen3BankScheme.BANK_NAMES for b in banks)
+    assert all(b.spec.name in scheme_cls.BANK_NAMES for b in banks)
     assert all(b.name_to_idx for b in banks)

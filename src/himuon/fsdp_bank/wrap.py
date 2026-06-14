@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from .bank import ParamBank
 from .scheme import BankScheme
@@ -37,8 +38,7 @@ def wrap_with_banks(
     specs = scheme.collect(model, world_size)
 
     # Inherit device + dtype from the model's first parameter. A model
-    # split across devices would need per-bank device selection; Qwen3
-    # single-device is what we support for now.
+    # split across devices would need per-bank device selection; not supported.
     first = next(model.parameters())
     device = first.device
     dtype = first.dtype
@@ -103,3 +103,73 @@ def unbank_state_dict(
         for idx, hf_name in enumerate(b.spec.source_param_names):
             out[hf_name] = bank_tensor[idx].clone()
     return out
+
+
+# -- shared scheme helpers -------------------------------------------------
+
+
+def get_layers(model: nn.Module):
+    """Locate the list of decoder layers in an HF causal-LM model.
+
+    The decoder-only families this package banks (Qwen3, Llama 3) wrap the
+    transformer as ``<Model>ForCausalLM.model.layers``. Hold the indirection
+    behind this helper so a future HF refactor only touches one line.
+    """
+    return model.model.layers
+
+
+def rewire_linear(
+    linear: nn.Linear,
+    root_model: nn.Module,
+    bank_name: str,
+    bank: ParamBank,
+    layer_idx: int,
+) -> None:
+    """Replace ``linear.forward`` with one that reads from the bank
+    at ``layer_idx``. Copies the original weight into the bank slice,
+    then deletes the original ``weight`` Parameter so it's not double-
+    counted (and the optimizer factory sees only the bank).
+
+    The closure resolves the bank each forward via
+    ``getattr(root_model, bank_name)`` rather than capturing the
+    Parameter directly — this is required because ``fully_shard``
+    REPLACES the ``root_model.<bank_name>`` attribute with a fresh
+    DTensor Parameter at wrap time. A closure that captured the
+    original Parameter would dereference an orphan (no grad flow).
+
+    ``root_model`` and ``bank_name`` are cheap ref-plus-string; no
+    nn.Module registration side-effect.
+    """
+    assert isinstance(linear, nn.Linear), f"expected nn.Linear, got {type(linear)}"
+    expected = bank.spec.matrix_shape
+    assert tuple(linear.weight.shape) == expected, (
+        f"shape mismatch for {bank.spec.name}[{layer_idx}]: "
+        f"linear.weight={tuple(linear.weight.shape)} vs bank={expected}"
+    )
+
+    # Copy into bank slot (honors current dtype/device of the bank).
+    with torch.no_grad():
+        bank.parameter.data[layer_idx].copy_(linear.weight.data)
+
+    # Drop the original Parameter. We also null the ``weight`` attribute
+    # outright so future code paths that still peek at it (e.g. HF
+    # ``_tie_weights``) break loudly instead of silently diverging.
+    del linear._parameters["weight"]
+
+    linear._bank_name = bank_name  # type: ignore[attr-defined]
+    linear._bank_idx = layer_idx  # type: ignore[attr-defined]
+
+    bias = linear.bias  # may be None; captured into closure
+    # Wrap root in a list so nn.Module's __setattr__ does not try to
+    # auto-register the nested module (which would create a cycle).
+    _root = [root_model]
+    name = bank_name
+    idx = layer_idx
+
+    def _forward(input: torch.Tensor, _root=_root, _name=name, _idx=idx, _bias=bias):
+        # getattr resolves to whatever is CURRENTLY attached at
+        # root_model.<name> — post-FSDP, this is the live DTensor.
+        w = getattr(_root[0], _name)[_idx]
+        return F.linear(input, w, _bias)
+
+    linear.forward = _forward  # type: ignore[assignment]
