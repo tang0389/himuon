@@ -8,7 +8,7 @@ descending population frequency. Restricting to S avoids confounding update-map
 quality with finite-sample coverage: an unsampled item has zero gradient and cannot
 be recovered after one step.
 
-Setup: d=1024, alpha=1.5, B/d=10, N=1e5, 3 seeds, normalization=none. The reported
+Setup: d=1024, alpha=1.5, B/d=10, N=1e5, 3 seeds. The reported
 curve goes up to the common cutoff k_max = min|S| across seeds; recovery is invariant
 to (positive) eta, so a single eta is used.
 
@@ -65,7 +65,6 @@ def run(
     batch_scale,
     num_items,
     tiles,
-    normalization,
     ns_steps,
     device="cuda",
 ):
@@ -105,7 +104,6 @@ def run(
                 eta=1.0,
                 ns_steps=ns_steps,
                 tile_size=tile if tile is not None else 256,
-                normalization=normalization,
             )
             recovered, _ = evaluate_recovery(problem, update)
             rec_s = recovered.to(torch.float32)[support_sorted]
@@ -133,7 +131,6 @@ def run(
             "batch_scale": batch_scale,
             "num_items": num_items,
             "tiles": list(tiles),
-            "normalization": normalization,
             "ns_steps": ns_steps,
             "k_max": k_max,
             "support_sizes": support_sizes,
@@ -224,7 +221,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch-scale", type=float, default=10.0)
     parser.add_argument("--num-items", type=int, default=100000)
     parser.add_argument("--tiles", type=int, nargs="+", default=[128, 256, 512])
-    parser.add_argument("--normalization", default="none")
     parser.add_argument("--ns-steps", type=int, default=5)
     parser.add_argument("--plot-only", action="store_true")
     args = parser.parse_args()
@@ -239,7 +235,6 @@ if __name__ == "__main__":
             batch_scale=args.batch_scale,
             num_items=args.num_items,
             tiles=args.tiles,
-            normalization=args.normalization,
             ns_steps=args.ns_steps,
         )
         plot(data)

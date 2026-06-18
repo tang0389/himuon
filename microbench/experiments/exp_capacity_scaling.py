@@ -87,7 +87,6 @@ def run(ds, alphas, batch_scale, num_items, seeds, tiles, ns_steps, device="cuda
                         eta=1.0,
                         ns_steps=ns_steps,
                         tile_size=tile if tile is not None else 256,
-                        normalization="none",
                     )
                     recovered, _ = evaluate_recovery(problem, update)
                     records.append(
@@ -119,7 +118,6 @@ def run(ds, alphas, batch_scale, num_items, seeds, tiles, ns_steps, device="cuda
             "seeds": list(seeds),
             "tiles": list(tiles),
             "ns_steps": ns_steps,
-            "normalization": "none",
             "gradient_mode": "true_minibatch",
             "device": torch.cuda.get_device_name(device),
         },

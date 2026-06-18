@@ -7,7 +7,7 @@ fp64 and held bit-identical across precision variants; only the GEMM precision i
 the NS iteration differs. fp8e4m3 uses native FP8 via torch._scaled_mm (per-tensor
 dynamic scaling) and requires an sm89+ GPU (e.g. L40S / H100).
 
-Setup: d=1024, N=4096, alpha=1.5, B/d=10, K=5 NS steps, normalization=tile_row_divide,
+Setup: d=1024, N=4096, alpha=1.5, B/d=10, K=5 NS steps,
 5 seeds. Recovery is invariant to (positive) eta, so a single eta is used. The operator
 gap delta_F is the relative Frobenius distance of the produced one-step update to its
 own fp64 reference, averaged over seeds.
@@ -80,7 +80,6 @@ def run(
     num_items,
     precisions,
     tiles,
-    normalization,
     ns_steps,
     problem_dtype,
     device="cuda",
@@ -88,7 +87,7 @@ def run(
     print(f"Device: {torch.cuda.get_device_name(device)}")
     print(
         f"d={d}, alpha={alpha}, N={num_items}, B/d={batch_scale}, seeds={list(seeds)}, "
-        f"precisions={precisions}, tiles={list(tiles)}, norm={normalization}\n"
+        f"precisions={precisions}, tiles={list(tiles)}\n"
     )
     methods = _methods(tiles)
     records = []
@@ -113,7 +112,6 @@ def run(
                 eta=1.0,
                 ns_steps=ns_steps,
                 tile_size=tile if tile is not None else 256,
-                normalization=normalization,
                 ns_precision="fp64_ref",
             )
             for precision in precisions:
@@ -126,7 +124,6 @@ def run(
                         eta=1.0,
                         ns_steps=ns_steps,
                         tile_size=tile if tile is not None else 256,
-                        normalization=normalization,
                         ns_precision=precision,
                     )
                 )
@@ -152,7 +149,6 @@ def run(
             "num_items": num_items,
             "precisions": list(precisions),
             "tiles": list(tiles),
-            "normalization": normalization,
             "ns_steps": ns_steps,
             "problem_dtype": problem_dtype,
             "device": torch.cuda.get_device_name(device),
@@ -182,8 +178,7 @@ def _write_table(rec_ms, gap_m, config, out_dir=None):
     lines = [
         f"% Low-precision one-step recovery, generated on {config['device']} "
         f"(d={config['d']}, N={config['num_items']}, alpha={config['alpha']}, "
-        f"B/d={config['batch_scale']}, K={config['ns_steps']}, {len(config['seeds'])} seeds, "
-        f"normalization={config['normalization']}).",
+        f"B/d={config['batch_scale']}, K={config['ns_steps']}, {len(config['seeds'])} seeds).",
         r"\begin{tabular}{l" + "c" * len(precs) + " cc}",
         r"  \toprule",
         r"  & \multicolumn{%d}{c}{Recovered items} & \multicolumn{2}{c}{Op.\ gap $\delta_F$ to fp64} \\"
@@ -239,7 +234,6 @@ if __name__ == "__main__":
         default=["fp64_ref", "fp32", "bf16", "fp8e4m3_native"],
     )
     parser.add_argument("--tiles", type=int, nargs="+", default=[128, 256, 512])
-    parser.add_argument("--normalization", default="tile_row_divide")
     parser.add_argument("--ns-steps", type=int, default=5)
     parser.add_argument(
         "--problem-dtype", default="float64", choices=["float32", "float64"]
@@ -258,7 +252,6 @@ if __name__ == "__main__":
             num_items=args.num_items,
             precisions=args.precisions,
             tiles=args.tiles,
-            normalization=args.normalization,
             ns_steps=args.ns_steps,
             problem_dtype=args.problem_dtype,
         )

@@ -1,4 +1,4 @@
-% Low-precision one-step recovery, generated on NVIDIA L40S (d=1024, N=4096, alpha=1.5, B/d=10.0, K=5, 5 seeds, normalization=tile_row_divide).
+% Low-precision one-step recovery, generated on NVIDIA L40S (d=1024, N=4096, alpha=1.5, B/d=10.0, K=5, 5 seeds).
 \begin{tabular}{lcccc cc}
   \toprule
   & \multicolumn{4}{c}{Recovered items} & \multicolumn{2}{c}{Op.\ gap $\delta_F$ to fp64} \\
@@ -6,8 +6,8 @@
   Method        & fp64 & fp32 & bf16 & fp8e4m3 & bf16 & fp8e4m3 \\
   \midrule
   Muon          & $517.8\!\pm\!11.3$ & $517.8\!\pm\!11.3$ & $517.4\!\pm\!11.7$ & $517.2\!\pm\!11.4$ & 0.062 & 0.019 \\
-  HiMuon-$512$  & $508.8\!\pm\!12.1$ & $508.8\!\pm\!12.1$ & $508.2\!\pm\!11.8$ & $508.8\!\pm\!11.9$ & 0.061 & 0.027 \\
-  HiMuon-$256$  & $486.4\!\pm\!12.6$ & $486.4\!\pm\!12.6$ & $487.2\!\pm\!11.1$ & $485.8\!\pm\!12.6$ & 0.057 & 0.039 \\
-  HiMuon-$128$  & $407.8\!\pm\!15.1$ & $407.8\!\pm\!15.1$ & $406.6\!\pm\!15.6$ & $406.8\!\pm\!15.3$ & 0.052 & 0.059 \\
+  HiMuon-$512$  & $508.8\!\pm\!12.1$ & $508.8\!\pm\!12.1$ & $508.2\!\pm\!11.8$ & $509.0\!\pm\!11.9$ & 0.061 & 0.027 \\
+  HiMuon-$256$  & $486.4\!\pm\!12.6$ & $486.4\!\pm\!12.6$ & $486.4\!\pm\!11.2$ & $485.8\!\pm\!12.6$ & 0.058 & 0.039 \\
+  HiMuon-$128$  & $408.0\!\pm\!15.3$ & $408.0\!\pm\!15.3$ & $406.6\!\pm\!15.6$ & $406.8\!\pm\!14.6$ & 0.052 & 0.059 \\
   \bottomrule
 \end{tabular}

@@ -402,35 +402,15 @@ def _normalize_tile_size(tile_size: int | tuple[int, int]) -> tuple[int, int]:
     return int(tile_size[0]), int(tile_size[1])
 
 
-def _descending_norm_permutation(g: torch.Tensor, dim: int) -> torch.Tensor:
-    if dim == 0:
-        norms = torch.linalg.vector_norm(g.to(torch.float32), ord=2, dim=1)
-    elif dim == 1:
-        norms = torch.linalg.vector_norm(g.to(torch.float32), ord=2, dim=0)
-    else:
-        raise ValueError(f"Unsupported dimension {dim} for permutation.")
-    return torch.argsort(norms, descending=True, stable=True)
-
-
-def _inverse_permutation(perm: torch.Tensor) -> torch.Tensor:
-    inverse = torch.empty_like(perm)
-    inverse[perm] = torch.arange(perm.numel(), device=perm.device, dtype=perm.dtype)
-    return inverse
-
-
 def tile_matrix(
     tensor: torch.Tensor,
     tile_size: int | tuple[int, int],
-    *,
-    shift: tuple[int, int] = (0, 0),
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     tile_h, tile_w = _normalize_tile_size(tile_size)
-    shifted = torch.roll(tensor, shifts=(-shift[0], -shift[1]), dims=(0, 1))
-
-    h, w = shifted.shape
+    h, w = tensor.shape
     pad_h = (tile_h - h % tile_h) % tile_h
     pad_w = (tile_w - w % tile_w) % tile_w
-    padded = F.pad(shifted, (0, pad_w, 0, pad_h))
+    padded = F.pad(tensor, (0, pad_w, 0, pad_h))
     h_pad, w_pad = padded.shape
     rows, cols = h_pad // tile_h, w_pad // tile_w
     tiled = padded.view(rows, tile_h, cols, tile_w).permute(0, 2, 1, 3).contiguous()
@@ -443,7 +423,6 @@ def tile_matrix(
         "tile_w": tile_w,
         "rows": rows,
         "cols": cols,
-        "shift": shift,
     }
     return tiled, info
 
@@ -455,56 +434,21 @@ def untile_matrix(tiled: torch.Tensor, info: dict[str, Any]) -> torch.Tensor:
         .view(info["rows"] * info["tile_h"], info["cols"] * info["tile_w"])
     )
     restored = restored[: info["orig_h"], : info["orig_w"]]
-    shift = info["shift"]
-    if shift != (0, 0):
-        restored = torch.roll(restored, shifts=(shift[0], shift[1]), dims=(0, 1))
     return restored
-
-
-def _compute_tile_scale(grid: torch.Tensor, mode: str) -> torch.Tensor:
-    rows, cols, tile_h, tile_w = grid.shape
-    if mode == "tile":
-        return grid.reshape(rows, cols, -1).norm(dim=2) / math.sqrt(tile_h * tile_w)
-    if mode == "tile_row":
-        return grid.reshape(rows, -1).norm(dim=1) / math.sqrt(cols * tile_h * tile_w)
-    raise ValueError(f"Unsupported tile scale mode: {mode}")
-
-
-def _apply_normalization(
-    orth_tiles: torch.Tensor,
-    raw_tiles: torch.Tensor,
-    normalization: str,
-    eps: float = 1e-8,
-) -> torch.Tensor:
-    if normalization == "none":
-        return orth_tiles
-
-    if normalization in {"tile_raw", "tile_divide"}:
-        scale = _compute_tile_scale(raw_tiles, "tile").unsqueeze(-1).unsqueeze(-1)
-    elif normalization in {"tile_row_raw", "tile_row_divide"}:
-        scale = _compute_tile_scale(raw_tiles, "tile_row").view(-1, 1, 1, 1)
-    else:
-        raise ValueError(f"Unsupported normalization: {normalization}")
-
-    if normalization.endswith("_raw"):
-        return orth_tiles * scale
-    return orth_tiles / (scale + eps)
 
 
 def himuon_operator(
     g: torch.Tensor,
     *,
     tile_size: int | tuple[int, int] = 256,
-    normalization: str = "none",
     steps: int = 5,
-    shift: tuple[int, int] = (0, 0),
     ns_precision: str = "fp32",
 ) -> torch.Tensor:
     tile_h, tile_w = _normalize_tile_size(tile_size)
     if g.numel() <= tile_h * tile_w:
         return quintic_ns_operator(g, steps=steps, ns_precision=ns_precision)
 
-    tiles, info = tile_matrix(g, (tile_h, tile_w), shift=shift)
+    tiles, info = tile_matrix(g, (tile_h, tile_w))
     orth_tiles = torch.empty_like(tiles, dtype=torch.float32)
     for r in range(info["rows"]):
         for c in range(info["cols"]):
@@ -513,34 +457,7 @@ def himuon_operator(
                 steps=steps,
                 ns_precision=ns_precision,
             )
-    orth_tiles = _apply_normalization(orth_tiles, tiles.to(torch.float32), normalization)
     return untile_matrix(orth_tiles, info)
-
-
-def reordered_himuon_operator(
-    g: torch.Tensor,
-    *,
-    tile_size: int | tuple[int, int] = 256,
-    normalization: str = "none",
-    steps: int = 5,
-    shift: tuple[int, int] = (0, 0),
-    ns_precision: str = "fp32",
-) -> torch.Tensor:
-    row_perm = _descending_norm_permutation(g, dim=0)
-    col_perm = _descending_norm_permutation(g, dim=1)
-    row_inv = _inverse_permutation(row_perm)
-    col_inv = _inverse_permutation(col_perm)
-
-    reordered = g[row_perm][:, col_perm]
-    reordered_update = himuon_operator(
-        reordered,
-        tile_size=tile_size,
-        normalization=normalization,
-        steps=steps,
-        shift=shift,
-        ns_precision=ns_precision,
-    )
-    return reordered_update[row_inv][:, col_inv]
 
 
 def apply_one_step(
@@ -550,8 +467,6 @@ def apply_one_step(
     eta: float,
     ns_steps: int = 5,
     tile_size: int | tuple[int, int] = 256,
-    normalization: str = "none",
-    shift: tuple[int, int] = (0, 0),
     ns_precision: str = "fp32",
 ) -> torch.Tensor:
     if optimizer == "sgd":
@@ -562,18 +477,7 @@ def apply_one_step(
         update = himuon_operator(
             g,
             tile_size=tile_size,
-            normalization=normalization,
             steps=ns_steps,
-            shift=shift,
-            ns_precision=ns_precision,
-        )
-    elif optimizer == "reordered_himuon":
-        update = reordered_himuon_operator(
-            g,
-            tile_size=tile_size,
-            normalization=normalization,
-            steps=ns_steps,
-            shift=shift,
             ns_precision=ns_precision,
         )
     else:
@@ -881,9 +785,7 @@ def make_result_record(
     eta: float,
     metrics: dict[str, Any],
     tile_size: int | tuple[int, int] | None = None,
-    normalization: str | None = None,
     ns_steps: int = 5,
-    shift: tuple[int, int] = (0, 0),
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     record: dict[str, Any] = {
@@ -898,8 +800,6 @@ def make_result_record(
         "eta": eta,
         "ns_steps": ns_steps,
         "tile_size": tile_size,
-        "normalization": normalization,
-        "tile_shift": shift,
     }
     record.update(gradient_meta)
     record.update(metrics)
