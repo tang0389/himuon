@@ -367,8 +367,8 @@ class HiMuon(Optimizer):
         buf1, buf2 = self.state[p]["moment1"], self.state[p]["moment2"]
         buf1.lerp_(g, 1 - betas[0])
         buf2.lerp_(g.square(), 1 - betas[1])
-        bc1 = (1 - betas[0] ** step).to(buf1.dtype)
-        bc2 = (1 - betas[1] ** step).to(buf2.dtype)
+        bc1 = 1 - betas[0] ** step
+        bc2 = 1 - betas[1] ** step
         return (buf1 / bc1) / (buf2.sqrt() / bc2**0.5 + eps)
 
     # -- Chunk-size cap (memory-bounded) ----------------------------------
