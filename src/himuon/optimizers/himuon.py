@@ -358,11 +358,12 @@ class HiMuon(Optimizer):
 
     def _compute_adamw_step(self, p, g, betas, eps):
         if "step" not in self.state[p]:
-            self.state[p]["step"] = 0
+            # Device scalar for CUDA-graph replay.
+            self.state[p]["step"] = torch.zeros((), device=g.device)
             self.state[p]["moment1"] = torch.zeros_like(g)
             self.state[p]["moment2"] = torch.zeros_like(g)
-        self.state[p]["step"] += 1
         step = self.state[p]["step"]
+        step.add_(1)
         buf1, buf2 = self.state[p]["moment1"], self.state[p]["moment2"]
         buf1.lerp_(g, 1 - betas[0])
         buf2.lerp_(g.square(), 1 - betas[1])

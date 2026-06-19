@@ -60,6 +60,7 @@ def _ns5_tile_body(
     BLOCK_N: tl.constexpr,
     DTYPE: tl.constexpr,
     ACC_DTYPE: tl.constexpr,
+    NS_STEPS: tl.constexpr,
     A_COEF: tl.constexpr,
     B_COEF: tl.constexpr,
     C_COEF: tl.constexpr,
@@ -85,7 +86,7 @@ def _ns5_tile_body(
     X_norm = X_raw / (norm + NORM_EPS)
     X = X_norm.to(DTYPE)
 
-    for _ in tl.static_range(_NS_STEPS):
+    for _ in tl.static_range(NS_STEPS):
         X_t = tl.trans(X)
         A_acc = tl.dot(X, X_t, out_dtype=ACC_DTYPE)
         A_bf = A_acc.to(DTYPE)
@@ -123,6 +124,7 @@ def ns5_smem_kernel(
     DTYPE_ID: tl.constexpr,  # 0 = bf16 (reserved for future fp16 key)
     DTYPE: tl.constexpr,
     ACC_DTYPE: tl.constexpr,
+    NS_STEPS: tl.constexpr,
     A_COEF: tl.constexpr,
     B_COEF: tl.constexpr,
     C_COEF: tl.constexpr,
@@ -159,6 +161,7 @@ def ns5_smem_kernel(
                 BLOCK_N,
                 DTYPE,
                 ACC_DTYPE,
+                NS_STEPS,
                 A_COEF,
                 B_COEF,
                 C_COEF,
@@ -181,6 +184,7 @@ def ns5_smem_kernel(
             BLOCK_N,
             DTYPE,
             ACC_DTYPE,
+            NS_STEPS,
             A_COEF,
             B_COEF,
             C_COEF,
@@ -246,6 +250,7 @@ def ns5_smem(
         DTYPE_ID=0,  # bf16 only for now
         DTYPE=tl.bfloat16,
         ACC_DTYPE=tl.float32,
+        NS_STEPS=_NS_STEPS,
         A_COEF=_NS_A,
         B_COEF=_NS_B,
         C_COEF=_NS_C,
