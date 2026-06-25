@@ -1,7 +1,7 @@
 <h1 align="center">HiMuon</h1>
 
 <p align="center">
-  <strong>A tile-local Newton-Schulz orthogonalized optimizer for LLM pre-training.</strong> Full training stack (single-GPU / DDP / FSDP with parameter-bank sharding) across Llama and Qwen model families, with baseline optimizers (AdamW, Muon, SOAP) for comparison.
+  <strong>A tile-local Newton-Schulz orthogonalized optimizer for LLM pre-training.</strong> HiMuon applies the Newton-Schulz iteration independently to fixed-size tiles of each momentum/gradient matrix, with the tile size ranging from the full matrix (equivalent to Muon) down to small intra-matrix tiles. Full training stack (single-GPU / DDP / FSDP with parameter-bank sharding) across Llama and Qwen model families, with baseline optimizers (AdamW, Muon, SOAP) for comparison.
 </p>
 
 <p align="center">
@@ -15,11 +15,11 @@
 
 ## ✨ Highlights
 
-- **HiMuon optimizer** — tile-local Newton-Schulz orthogonalization; ships with a Triton super-kernel (SRAM-resident, FP32-accumulating), cross-layer batched GEMM, and full-step CUDA graph capture.
-- **FSDP with parameter-bank sharding** — scales HiMuon and Muon to large models with zero cross-rank collectives inside the optimizer.
-- **Mid-training reconfigure** — swap HiMuon's tile size on the fly, e.g., full-matrix warmup → tile-local body, without restarting; the captured CUDA graph auto re-captures after the change.
-- **Three training entry points, one CLI** — `train.py` / `train_ddp.py` / `train_fsdp.py` share the same flags, so switching between single-GPU, DDP, and FSDP is a one-line change.
-- **Built-in optimizer zoo** — AdamW, SOAP, Muon, HiMuon all reachable via `--optimizer <name>` through a single factory; enables clean head-to-head comparisons.
+- **HiMuon optimizer** — tile-local Newton-Schulz orthogonalization; custom Triton kernel (SRAM-resident, FP32-accumulating), cross-layer batched GEMM, full-step CUDA graph capture.
+- **Dynamic tile size** — the tile spans from the full matrix (`tile_size ≥ matrix dims`, one tile → Muon) down to small intra-matrix tiles; lower FLOPs, less HBM traffic, reconfigurable mid-training with automatic CUDA-graph recapture.
+- **FSDP parameter-bank sharding** — scales HiMuon and Muon to large models with no cross-rank collectives inside the optimizer.
+- **One CLI, three modes** — `train.py` / `train_ddp.py` / `train_fsdp.py` share the same flags; single-GPU ↔ DDP ↔ FSDP is a one-line change.
+- **Optimizer zoo** — AdamW, SOAP, Muon, HiMuon via `--optimizer <name>` through one factory.
 
 <p align="center">
   <img src="assets/tile_local_ns.svg" alt="Full-matrix Newton-Schulz (Muon) vs tile-local NS (HiMuon)" width="100%"/>
@@ -37,7 +37,7 @@ uv sync --extra dev    # + pytest, matplotlib
 uv sync --all-extras   # everything
 ```
 
-Triton (bundled with PyTorch) is required for the HiMuon kernels. GPU training assumes CUDA 12.x with bf16 support (A40 / L40S / A100 / H100).
+Triton (bundled with PyTorch) is required for the HiMuon kernels. GPU training requires CUDA 12.x with bf16 support (supported devices: A40 / L40S / A100 / H100).
 
 ---
 
@@ -86,7 +86,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 uv run torchrun \
 
 ### Reconfigure schedule
 
-Change HiMuon's `tile_size` mid-training via `--reconfigure-schedule`, a JSON list of `{"step": N, ...}` dicts. Works in single-GPU, DDP, and FSDP alike — it's an optimizer-level feature, not tied to any distributed mode. A common pattern is to start with `tile_size` larger than any matrix (each matrix becomes a single tile, mathematically equivalent to Muon but retaining HiMuon's cross-layer batching) and switch to tile-local HiMuon after the warmup:
+Change HiMuon's `tile_size` mid-training via `--reconfigure-schedule`, a JSON list of `{"step": N, ...}` dicts. Works in single-GPU, DDP, and FSDP alike — it's an optimizer-level feature, not tied to any distributed mode. A common pattern is a full-to-local schedule: start with `tile_size` larger than any matrix (each matrix becomes a single tile, so the tiled map coincides with the full-matrix Muon map, while retaining HiMuon's cross-layer batching) and switch to tile-local HiMuon for the main training phase:
 
 ```bash
 uv run train.py \
@@ -98,7 +98,7 @@ uv run train.py \
 
 ### CUDA graph capture
 
-HiMuon captures the full optimizer step (momentum → tile → NS → scatter → untile) into a CUDA graph after a short warmup, replacing hundreds of per-parameter kernel launches with one `cudaGraphLaunch`. LR and weight decay are applied outside the graph so schedulers take effect without recapture. Enabled by default — pass `--no-cuda-graph` to disable. `reconfigure()` clears the graph; it's re-captured on the next step.
+HiMuon captures the full optimizer step (momentum → tile → NS → scatter → untile) into a CUDA graph after a few eager warmup steps (for Triton autotuning and allocator settling), replacing hundreds of per-parameter kernel launches with one `cudaGraphLaunch`. LR and weight decay are applied outside the graph so schedulers take effect without recapture. Enabled by default — pass `--no-cuda-graph` to disable. `reconfigure()` clears the graph; it's re-captured on the next step.
 
 ### HF-format checkpoint save
 
@@ -111,7 +111,7 @@ Pass `--save-checkpoint` to any training script (`train.py` / `train_ddp.py` / `
 | CLI key | Class | Distributed modes | Notes |
 |---|---|---|---|
 | `adamw` | `AdamW` | single / DDP / FSDP | standard AdamW |
-| `soap` | `SOAP` | single / DDP | diagonal preconditioner |
+| `soap` | `SOAP` | single / DDP | Shampoo preconditioner, Adam in its eigenbasis |
 | `muon` | `Muon` | single / DDP | Newton-Schulz orthogonalization |
 | `muon-fsdp` | `MuonFsdp` | FSDP + banks | Muon ported to bank DTensors; baseline for comparison with HiMuon |
 | `himuon` | `HiMuon` | single / DDP / FSDP + banks | tile-local NS, cross-layer batched, CUDA graph |
@@ -141,7 +141,7 @@ fully_shard(model, mesh=mesh, mp_policy=mp_policy)
 release_pre_shard_refs(banks)  # free pre-shard full-size references
 ```
 
-`Qwen3BankScheme` produces 5 banks: `q_bank`, `kv_bank`, `o_bank`, `gate_up_bank`, `down_bank`. Other model families need their own `BankScheme` implementation.
+`Qwen3BankScheme` and `Llama3BankScheme` are provided, each producing 5 banks: `q_bank`, `kv_bank`, `o_bank`, `gate_up_bank`, `down_bank`. Other model families need their own `BankScheme` implementation.
 
 ---
 
@@ -150,7 +150,7 @@ release_pre_shard_refs(banks)  # free pre-shard full-size references
 ```
 himuon/
 ├── src/himuon/
-│   ├── fsdp_bank/          # parameter-bank sharding for FSDP (Qwen3 scheme)
+│   ├── fsdp_bank/          # parameter-bank sharding for FSDP (Qwen3 + Llama3 schemes)
 │   ├── optimizers/         # AdamW, Muon, SOAP, HiMuon
 │   ├── triton_kernels/     # fused NS kernels
 │   ├── dataset.py          # FineWeb streaming dataset
@@ -178,11 +178,11 @@ uv run pytest tests/
 ## 📖 Citation
 
 ```bibtex
-@misc{himuon,
-  title   = {Hierarchical Muon: Tile-Local Newton-Schulz Orthogonalization for Scalable LLM Pre-Training},
-  author  = {TBD},
-  year    = {2026},
-  note    = {Preprint in preparation.}
+@article{tang2026himuon,
+  title   = {Hierarchical Muon: Tiled Newton-Schulz Updates for Efficient Muon Optimization},
+  author  = {Tang, Ziyuan and Xu, Tianshi and Saad, Yousef and Xi, Yuanzhe},
+  journal = {arXiv preprint arXiv:2606.27216},
+  year    = {2026}
 }
 ```
 

@@ -70,7 +70,7 @@ def bmm_add_kernel(
         b_ptrs += BLOCK_SIZE_K * stride_bk
         x_ptrs += BLOCK_SIZE_K * stride_xk
 
-    # Dynamic output dtype (matches XXT / ba_plus_cAA pattern)
+    # Dynamic output dtype.
     out_dtype = c_ptr.dtype.element_ty
     c = accumulator.to(out_dtype)
 

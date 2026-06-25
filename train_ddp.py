@@ -45,7 +45,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb", action="store_true", help="Use wandb for logging")
     parser.add_argument("--save-checkpoint", action="store_true", help="Save checkpoint")
     parser.add_argument("--run-name", type=str, default=None, help="Override WandB run name")
-    parser.add_argument("--kwargs", nargs="*", default=[], help="Extra key=val args, e.g. --kwargs ns_steps=10 nestrov=False")
+    parser.add_argument("--kwargs", nargs="*", default=[], help="Extra key=val args, e.g. --kwargs ns_steps=10 nesterov=False")
     args = parser.parse_args()
     merge_kv_args(args)
 

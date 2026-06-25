@@ -28,8 +28,8 @@ def ba_plus_cAA_kernel(
     GROUP_SIZE_M: tl.constexpr,
     LOWER_UPPER: tl.constexpr,
 ):
-    # This is mostly duplicated from XXT_kernel, but also loads and adds a block of A
-    # Performance is slightly slower than XXT_kernel, so we use two separate kernels
+    # Tiled A @ A.T accumulation, with a block of A loaded and added in for the
+    # beta * A term.
     pid = tl.program_id(axis=0)
     batch_idx, m_idx, n_idx = polar_pid_to_block(
         pid, M, BLOCK_SIZE_M, BLOCK_SIZE_N, GROUP_SIZE_M

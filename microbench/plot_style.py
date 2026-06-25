@@ -1,11 +1,9 @@
 """
-Shared plotting style for HiMuon benchmark suite.
+Shared plotting style for the HiMuon benchmark suite.
 
-Style follows guidelines from figure_reference_index.md:
-  - IndexCache-style bar charts: navy protagonist, hatched gray baseline
-  - Goodfellow-style line plots: 2-3 colors, direct labels, minimal chrome
-  - Max 2-3 colors per figure, serif fonts, white background, no grid
-  - No top/right spines, value labels on bars, shared legend below panels
+Conventions: navy protagonist (HiMuon) vs. hatched gray baseline (Muon), 2-3
+colors per figure, sans-serif fonts, white background, no grid, top/right spines
+removed, value labels on bars.
 """
 
 import os
@@ -69,7 +67,7 @@ def apply_style():
 # ---------------------------------------------------------------------------
 # Color palettes — switch by changing PALETTE below
 # ---------------------------------------------------------------------------
-# Option A: IndexCache style (navy + gray) — default
+# Option A: navy + gray (default)
 _PALETTE_INDEX = {
     "HIMUON": "#2B5EA7",
     "MUON": "#888888",
@@ -78,7 +76,7 @@ _PALETTE_INDEX = {
     "FWD": "#A8CBE0",
     "BWD": "#2B5EA7",
 }
-# Option B: DualPath style (warm vs cool)
+# Option B: warm vs cool
 _PALETTE_DUAL = {
     "HIMUON": "#E8734A",
     "MUON": "#4AAECC",
@@ -87,7 +85,7 @@ _PALETTE_DUAL = {
     "FWD": "#A8CBE0",
     "BWD": "#4AAECC",
 }
-# Option C: EffiLoRA style (muted academic)
+# Option C: muted academic
 _PALETTE_EFFI = {
     "HIMUON": "#2B4590",
     "MUON": "#4A9060",
