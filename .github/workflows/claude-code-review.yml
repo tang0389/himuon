@@ -16,10 +16,11 @@ concurrency:
 
 jobs:
   claude-review:
-    # Skip drafts and Dependabot dep-bump PRs — no LLM review needed, saves cost.
+    # Skip drafts, Dependabot dep-bump PRs, and fork PRs (no token to review with).
     if: >-
       github.event.pull_request.draft == false &&
-      github.event.pull_request.user.login != 'dependabot[bot]'
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     permissions:
       contents: read

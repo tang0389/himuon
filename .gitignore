@@ -9,6 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
+# Secrets
+.env
+*.pem
+*.key
+
 # Checkpoints
 checkpoints/
 
