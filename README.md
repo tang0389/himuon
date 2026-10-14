@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <a href="https://arxiv.org/abs/2606.27216"><img src="https://img.shields.io/badge/arXiv-2606.27216-b31b1b?logo=arxiv&logoColor=white" alt="arXiv: 2606.27216"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT"/></a>
   <img src="https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white" alt="Python 3.12+"/>
   <img src="https://img.shields.io/badge/PyTorch-2.6-EE4C2C?logo=pytorch&logoColor=white" alt="PyTorch 2.6"/>
